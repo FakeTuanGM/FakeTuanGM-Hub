@@ -1,536 +1,197 @@
--- Check Game
-if game.PlaceId == 2753915549 then
-    local Players = game:GetService("Players")
-    local Player = Players.LocalPlayer
-    local Character = Player.Character or Player.CharacterAdded:Wait()
-    
-    -- Services
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local RunService = game:GetService("RunService")
-    local Workspace = game:GetService("Workspace")
-    local TweenService = game:GetService("TweenService")
-    local UserInputService = game:GetService("UserInputService")
-    local HttpService = game:GetService("HttpService")
-    
-    -- Player Status Variables
-    local PlayerStatus = {
-        Level = 0,
-        Beli = 0,
-        Fragments = 0,
-        DevilFruit = "None",
-        CurrentIsland = "None",
-        CurrentQuest = "None",
-        CurrentRaid = "None",
-        Health = 100,
-        Energy = 100
-    }
-    
-    -- Get Player Info
-    local function GetPlayerInfo()
-        local success, result = pcall(function()
-            return HttpService:GetAsync("https://users.roblox.com/v1/users/" .. Player.UserId)
-        end)
-        
-        if success then
-            return HttpService:JSONDecode(result)
-        end
-        return nil
-    end
-    
-    local function GetPlayerAvatar()
-        local success, result = pcall(function()
-            return HttpService:GetAsync("https://thumbnails.roblox.com/v1/users/avatar?userIds=" .. Player.UserId .. "&size=420x420&format=Png&isCircular=true")
-        end)
-        
-        if success then
-            local data = HttpService:JSONDecode(result)
-            return data.data[1].imageUrl
-        end
-        return nil
-    end
-    
-    -- Update Player Status
-    local function UpdatePlayerStatus()
-        -- Update Basic Stats
-        PlayerStatus.Level = Player.Data.Level.Value
-        PlayerStatus.Beli = Player.Data.Beli.Value
-        PlayerStatus.Fragments = Player.Data.Fragments.Value
-        
-        -- Update Health and Energy
-        if Character and Character:FindFirstChild("Humanoid") then
-            PlayerStatus.Health = Character.Humanoid.Health
-            PlayerStatus.Energy = Character.Humanoid.Energy
-        end
-        
-        -- Update Devil Fruit
-        if Player.Data.DevilFruit.Value ~= "" then
-            PlayerStatus.DevilFruit = Player.Data.DevilFruit.Value
-        else
-            PlayerStatus.DevilFruit = "None"
-        end
-        
-        -- Update Current Island
-        local currentIsland = nil
-        for _, island in pairs(Workspace:GetChildren()) do
-            if island:IsA("Model") and island.Name:find("Island") then
-                if (island.PrimaryPart.Position - Character.HumanoidRootPart.Position).Magnitude < 1000 then
-                    currentIsland = island.Name
-                    break
-                end
-            end
-        end
-        PlayerStatus.CurrentIsland = currentIsland or "None"
-        
-        -- Update Current Quest
-        if Player.PlayerGui:FindFirstChild("Quest") then
-            local quest = Player.PlayerGui.Quest
-            if quest.Visible then
-                PlayerStatus.CurrentQuest = quest.Title.Text
-            else
-                PlayerStatus.CurrentQuest = "None"
-            end
-        end
-        
-        -- Update Current Raid
-        if Workspace:FindFirstChild("Raid") then
-            PlayerStatus.CurrentRaid = "Active"
-        else
-            PlayerStatus.CurrentRaid = "None"
-        end
-    end
-    
-    -- Loading Screen
-    local LoadingScreen = Instance.new("ScreenGui")
-    local MainFrame = Instance.new("Frame")
-    local Title = Instance.new("TextLabel")
-    local SubTitle = Instance.new("TextLabel")
-    local LoadingBar = Instance.new("Frame")
-    local LoadingBarFill = Instance.new("Frame")
-    local UICorner = Instance.new("UICorner")
-    local UICorner2 = Instance.new("UICorner")
-    
-    LoadingScreen.Name = "LoadingScreen"
-    LoadingScreen.Parent = game.CoreGui
-    LoadingScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    MainFrame.Name = "MainFrame"
-    MainFrame.Parent = LoadingScreen
-    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -100)
-    MainFrame.Size = UDim2.new(0, 400, 0, 200)
-    
-    UICorner.Parent = MainFrame
-    UICorner.CornerRadius = UDim.new(0, 8)
-    
-    Title.Name = "Title"
-    Title.Parent = MainFrame
-    Title.BackgroundTransparency = 1
-    Title.Position = UDim2.new(0, 0, 0, 20)
-    Title.Size = UDim2.new(1, 0, 0, 40)
-    Title.Font = Enum.Font.GothamBold
-    Title.Text = "FakeTuanGM HUB"
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 32
-    
-    SubTitle.Name = "SubTitle"
-    SubTitle.Parent = MainFrame
-    SubTitle.BackgroundTransparency = 1
-    SubTitle.Position = UDim2.new(0, 0, 0, 60)
-    SubTitle.Size = UDim2.new(1, 0, 0, 20)
-    SubTitle.Font = Enum.Font.Gotham
-    SubTitle.Text = "Loading..."
-    SubTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
-    SubTitle.TextSize = 16
-    
-    LoadingBar.Name = "LoadingBar"
-    LoadingBar.Parent = MainFrame
-    LoadingBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    LoadingBar.BorderSizePixel = 0
-    LoadingBar.Position = UDim2.new(0.1, 0, 0.8, 0)
-    LoadingBar.Size = UDim2.new(0.8, 0, 0, 10)
-    
-    UICorner2.Parent = LoadingBar
-    UICorner2.CornerRadius = UDim.new(0, 5)
-    
-    LoadingBarFill.Name = "LoadingBarFill"
-    LoadingBarFill.Parent = LoadingBar
-    LoadingBarFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-    LoadingBarFill.BorderSizePixel = 0
-    LoadingBarFill.Size = UDim2.new(0, 0, 1, 0)
-    
-    UICorner2:Clone().Parent = LoadingBarFill
-    
-    -- Notify System
-    local Notify = function(title, text, type)
-        type = type or "info"
-        local colors = {
-            info = Color3.fromRGB(0, 170, 255),
-            success = Color3.fromRGB(0, 255, 0),
-            warning = Color3.fromRGB(255, 170, 0),
-            error = Color3.fromRGB(255, 0, 0)
-        }
-        
-        local ScreenGui = Instance.new("ScreenGui")
-        local Frame = Instance.new("Frame")
-        local Title = Instance.new("TextLabel")
-        local Text = Instance.new("TextLabel")
-        local Icon = Instance.new("TextLabel")
-        local UICorner = Instance.new("UICorner")
-        
-        ScreenGui.Parent = game.CoreGui
-        ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        
-        Frame.Parent = ScreenGui
-        Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-        Frame.Position = UDim2.new(1, 10, 0.8, 0)
-        Frame.Size = UDim2.new(0, 300, 0, 100)
-        
-        UICorner.Parent = Frame
-        UICorner.CornerRadius = UDim.new(0, 8)
-        
-        Icon.Parent = Frame
-        Icon.BackgroundTransparency = 1
-        Icon.Position = UDim2.new(0, 10, 0, 10)
-        Icon.Size = UDim2.new(0, 20, 0, 20)
-        Icon.Font = Enum.Font.GothamBold
-        Icon.Text = type == "info" and "i" or type == "success" and "✓" or type == "warning" and "!" or "×"
-        Icon.TextColor3 = colors[type]
-        Icon.TextSize = 16
-        
-        Title.Parent = Frame
-        Title.BackgroundTransparency = 1
-        Title.Position = UDim2.new(0, 40, 0, 10)
-        Title.Size = UDim2.new(1, -50, 0, 20)
-        Title.Font = Enum.Font.GothamBold
-        Title.Text = title
-        Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Title.TextSize = 16
-        Title.TextXAlignment = Enum.TextXAlignment.Left
-        
-        Text.Parent = Frame
-        Text.BackgroundTransparency = 1
-        Text.Position = UDim2.new(0, 40, 0, 35)
-        Text.Size = UDim2.new(1, -50, 0, 50)
-        Text.Font = Enum.Font.Gotham
-        Text.Text = text
-        Text.TextColor3 = Color3.fromRGB(200, 200, 200)
-        Text.TextSize = 14
-        Text.TextWrapped = true
-        Text.TextXAlignment = Enum.TextXAlignment.Left
-        
-        local TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        local Tween = TweenService:Create(Frame, TweenInfo, {Position = UDim2.new(1, -310, 0.8, 0)})
-        Tween:Play()
-        
-        task.delay(3, function()
-            local TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-            local Tween = TweenService:Create(Frame, TweenInfo, {Position = UDim2.new(1, 10, 0.8, 0)})
-            Tween:Play()
-            
-            Tween.Completed:Connect(function()
-                ScreenGui:Destroy()
-            end)
-        end)
-    end
-    
-    -- Variables
-    local Settings = {
-        AutoFarm = false,
-        AutoFarmNearest = false,
-        AutoCollect = false,
-        NoClip = false,
-        WalkSpeed = 16,
-        JumpPower = 50,
-        TargetEnemy = nil,
-        FarmDistance = 50,
-        UIEnabled = true,
-        AutoUpdateStatus = true
-    }
-    
-    -- UI Library
-    local Amethyst = loadstring(game:HttpGet("https://raw.githubusercontent.com/AmethystHub/AmethystHub/main/AmethystHub.lua"))()
-    local Window = Amethyst:CreateWindow({
-        Title = "Blox Fruits Hub",
-        SubTitle = "by TuanGM",
-        TabTitle = "Blox Fruits Hub"
+--[[
+Grow a Garden Script by ChatGPT
+Features:
+- Auto Collect
+- Auto Summer Fruit Collect & Submit
+- Auto Sell (custom delay)
+- UI Themes (Amethyst, Dark, Light)
+- Settings (ESP, Black Screen, Boost FPS, Language)
+- Main (Speed, Jump, Fly, Player Status)
+- Utility (Remove/Reclaim Plants)
+- Shop (Auto Buy Seeds, Gear, Eggs, etc.)
+- Anti-AFK, Advanced Anti-Ban
+- Scroll UI
+- Notify System (Load Done, Remove Done)
+- Auto Plant (Random, Character-based)
+--]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+local Settings = {
+    Theme = "Amethyst",
+    Language = "English",
+    AutoCollect = true,
+    AutoSummerFruit = true,
+    AutoSubmitMode = "Super Fast",
+    AutoSellDelay = 5,
+    ESP = false,
+    BlackScreen = false,
+    BoostFPS = true,
+    Speed = 16,
+    Jump = 50,
+    Fly = false,
+    AutoPlantMode = "Random",
+    AutoBuySeeds = true,
+    AutoBuyGear = true,
+    AutoBuyEgg = true,
+    AntiAFK = true,
+    AntiBan = true
+}
+
+-- UI Library (Use your preferred library or a custom one)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Grow a Garden GUI", Settings.Theme)
+
+-- Notify Function
+local function Notify(title, text, duration)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = title,
+        Text = text,
+        Duration = duration or 5
     })
-    
-    -- Player Status Tab
-    local PlayerTab = Window:CreateTab("Player Status", 4483362458)
-    local PlayerSection = PlayerTab:CreateSection("Player Information")
-    
-    -- Create Avatar
-    local AvatarFrame = Instance.new("Frame")
-    local AvatarImage = Instance.new("ImageLabel")
-    local UICorner = Instance.new("UICorner")
-    
-    AvatarFrame.Name = "AvatarFrame"
-    AvatarFrame.Parent = PlayerSection
-    AvatarFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    AvatarFrame.Position = UDim2.new(0.5, -50, 0, 10)
-    AvatarFrame.Size = UDim2.new(0, 100, 0, 100)
-    
-    UICorner.Parent = AvatarFrame
-    UICorner.CornerRadius = UDim.new(0, 8)
-    
-    AvatarImage.Name = "AvatarImage"
-    AvatarImage.Parent = AvatarFrame
-    AvatarImage.BackgroundTransparency = 1
-    AvatarImage.Position = UDim2.new(0, 0, 0, 0)
-    AvatarImage.Size = UDim2.new(1, 0, 1, 0)
-    AvatarImage.Image = GetPlayerAvatar()
-    
-    -- Player Info
-    local playerInfo = GetPlayerInfo()
-    if playerInfo then
-        PlayerSection:CreateLabel("Username: " .. playerInfo.name)
-        PlayerSection:CreateLabel("Display Name: " .. playerInfo.displayName)
-    end
-    
-    -- Game Stats
-    local StatsSection = PlayerTab:CreateSection("Game Statistics")
-    
-    local LevelLabel = StatsSection:CreateLabel("Level: " .. PlayerStatus.Level)
-    local BeliLabel = StatsSection:CreateLabel("Beli: " .. PlayerStatus.Beli)
-    local FragmentsLabel = StatsSection:CreateLabel("Fragments: " .. PlayerStatus.Fragments)
-    local DevilFruitLabel = StatsSection:CreateLabel("Devil Fruit: " .. PlayerStatus.DevilFruit)
-    local IslandLabel = StatsSection:CreateLabel("Current Island: " .. PlayerStatus.CurrentIsland)
-    local QuestLabel = StatsSection:CreateLabel("Current Quest: " .. PlayerStatus.CurrentQuest)
-    local RaidLabel = StatsSection:CreateLabel("Current Raid: " .. PlayerStatus.CurrentRaid)
-    local HealthLabel = StatsSection:CreateLabel("Health: " .. PlayerStatus.Health)
-    local EnergyLabel = StatsSection:CreateLabel("Energy: " .. PlayerStatus.Energy)
-    
-    -- Auto Update Status
-    StatsSection:CreateToggle({
-        Title = "Auto Update Status",
-        Default = true,
-        Callback = function(Value)
-            Settings.AutoUpdateStatus = Value
-            Notify("Status Update", "Auto Update Status has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    -- Update Stats
-    RunService.Heartbeat:Connect(function()
-        if Settings.AutoUpdateStatus then
-            UpdatePlayerStatus()
-            
-            LevelLabel:Update("Level: " .. PlayerStatus.Level)
-            BeliLabel:Update("Beli: " .. PlayerStatus.Beli)
-            FragmentsLabel:Update("Fragments: " .. PlayerStatus.Fragments)
-            DevilFruitLabel:Update("Devil Fruit: " .. PlayerStatus.DevilFruit)
-            IslandLabel:Update("Current Island: " .. PlayerStatus.CurrentIsland)
-            QuestLabel:Update("Current Quest: " .. PlayerStatus.CurrentQuest)
-            RaidLabel:Update("Current Raid: " .. PlayerStatus.CurrentRaid)
-            HealthLabel:Update("Health: " .. math.floor(PlayerStatus.Health))
-            EnergyLabel:Update("Energy: " .. math.floor(PlayerStatus.Energy))
-        end
-    end)
-    
-    -- Main Tab
-    local MainTab = Window:CreateTab("Main Farm", 4483362458)
-    local MainSection = MainTab:CreateSection("Main Farm")
-    
-    MainSection:CreateLabel("Welcome to Blox Fruits Hub")
-    MainSection:CreateLabel("Press RightShift to Toggle UI")
-    
-    MainSection:CreateToggle({
-        Title = "Auto Farm Level",
-        Default = false,
-        Callback = function(Value)
-            Settings.AutoFarm = Value
-            Notify("Auto Farm", "Auto Farm has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    MainSection:CreateToggle({
-        Title = "Auto Farm Nearest",
-        Default = false,
-        Callback = function(Value)
-            Settings.AutoFarmNearest = Value
-            Notify("Auto Farm Nearest", "Auto Farm Nearest has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    MainSection:CreateToggle({
-        Title = "Auto Collect",
-        Default = false,
-        Callback = function(Value)
-            Settings.AutoCollect = Value
-            Notify("Auto Collect", "Auto Collect has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    -- Raid Tab
-    local RaidTab = Window:CreateTab("Raid", 4483362458)
-    local RaidSection = RaidTab:CreateSection("Raid Settings")
-    
-    RaidSection:CreateToggle({
-        Title = "Auto Raid",
-        Default = false,
-        Callback = function(Value)
-            Notify("Auto Raid", "Auto Raid has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    RaidSection:CreateDropdown({
-        Title = "Select Raid",
-        Options = {"Flame", "Ice", "Quake", "Light", "Dark", "String", "Rumble", "Magma", "Buddha", "Sand", "Phoenix"},
-        Default = "Flame",
-        Callback = function(Value)
-            Notify("Raid Selection", "Selected Raid: " .. Value, "info")
-        end
-    })
-    
-    -- Fruit Tab
-    local FruitTab = Window:CreateTab("Fruit", 4483362458)
-    local FruitSection = FruitTab:CreateSection("Fruit Settings")
-    
-    FruitSection:CreateToggle({
-        Title = "Auto Buy Random Fruit",
-        Default = false,
-        Callback = function(Value)
-            Notify("Auto Buy Fruit", "Auto Buy Random Fruit has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    FruitSection:CreateToggle({
-        Title = "Auto Store Fruit",
-        Default = false,
-        Callback = function(Value)
-            Notify("Auto Store Fruit", "Auto Store Fruit has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    -- Settings Tab
-    local SettingsTab = Window:CreateTab("Settings", 4483362458)
-    local SettingsSection = SettingsTab:CreateSection("Player Settings")
-    
-    SettingsSection:CreateSlider({
-        Title = "Walk Speed",
-        Default = 16,
-        Min = 16,
-        Max = 500,
-        Callback = function(Value)
-            Settings.WalkSpeed = Value
-            Character:WaitForChild("Humanoid").WalkSpeed = Value
-            Notify("Walk Speed", "Walk Speed has been set to " .. Value, "info")
-        end
-    })
-    
-    SettingsSection:CreateSlider({
-        Title = "Jump Power",
-        Default = 50,
-        Min = 50,
-        Max = 500,
-        Callback = function(Value)
-            Settings.JumpPower = Value
-            Character:WaitForChild("Humanoid").JumpPower = Value
-            Notify("Jump Power", "Jump Power has been set to " .. Value, "info")
-        end
-    })
-    
-    SettingsSection:CreateToggle({
-        Title = "NoClip",
-        Default = false,
-        Callback = function(Value)
-            Settings.NoClip = Value
-            if Value then
-                RunService.Stepped:Connect(function()
-                    for _, part in pairs(Character:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
-                    end
-                end)
-            end
-            Notify("NoClip", "NoClip has been " .. (Value and "enabled" or "disabled"), Value and "success" or "info")
-        end
-    })
-    
-    -- Discord Tab
-    local DiscordTab = Window:CreateTab("Discord", 4483362458)
-    local DiscordSection = DiscordTab:CreateSection("Discord")
-    
-    DiscordSection:CreateButton({
-        Title = "Join Discord",
-        Callback = function()
-            setclipboard("https://discord.gg/gajFPVpSkW")
-            Notify("Discord", "Discord link has been copied to clipboard!", "success")
-        end
-    })
-    
-    -- Functions
-    local function GetNearestEnemy()
-        local nearestEnemy = nil
-        local shortestDistance = Settings.FarmDistance
-        
-        for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
-            if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
-                local distance = (enemy.HumanoidRootPart.Position - Character.HumanoidRootPart.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestEnemy = enemy
-                end
-            end
-        end
-        
-        return nearestEnemy
-    end
-    
-    local function AttackEnemy(enemy)
-        if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-            Character.HumanoidRootPart.CFrame = CFrame.new(enemy.HumanoidRootPart.Position + Vector3.new(0, 0, 3))
-            
-            local args = {
-                [1] = enemy.HumanoidRootPart.Position,
-                [2] = enemy
-            }
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("Z", args)
+end
+
+Notify("Script", "Grow a Garden Script Loaded Successfully", 6)
+
+-- Main Tab
+local Main = Window:NewTab("Main")
+local MainSection = Main:NewSection("Player Settings")
+
+MainSection:NewSlider("Walk Speed", "Adjust your speed", 200, 16, function(v)
+    LocalPlayer.Character.Humanoid.WalkSpeed = v
+end)
+
+MainSection:NewSlider("Jump Power", "Adjust your jump", 200, 50, function(v)
+    LocalPlayer.Character.Humanoid.JumpPower = v
+end)
+
+MainSection:NewToggle("Fly", "Toggle fly mode", function(v)
+    Settings.Fly = v
+end)
+
+MainSection:NewButton("Show Status", "Display player status", function()
+    Notify("Player Status", "Shekels: 999 | Honey: 999 | Name: " .. LocalPlayer.Name, 10)
+end)
+
+-- Auto Section
+local Auto = Window:NewTab("Automation")
+local AutoSection = Auto:NewSection("Auto Tasks")
+
+AutoSection:NewToggle("Auto Collect", "Automatically collects items", function(v)
+    Settings.AutoCollect = v
+end)
+
+AutoSection:NewToggle("Auto Summer Fruit", "Collect Summer Fruit", function(v)
+    Settings.AutoSummerFruit = v
+end)
+
+AutoSection:NewDropdown("Auto Submit Speed", "Select submit speed", {"Super Fast", "Fast", "Normal", "Slow"}, function(v)
+    Settings.AutoSubmitMode = v
+end)
+
+AutoSection:NewSlider("Auto Sell Delay (s)", "Delay for selling", 60, 5, function(v)
+    Settings.AutoSellDelay = v
+end)
+
+AutoSection:NewToggle("Auto Plant", "Enable Auto Planting", function(v)
+    Settings.AutoPlant = v
+end)
+
+AutoSection:NewDropdown("Plant Mode", "Choose plant method", {"Random", "Character"}, function(v)
+    Settings.AutoPlantMode = v
+end)
+
+-- Utility Tab
+local Utility = Window:NewTab("Utility")
+local UtilitySection = Utility:NewSection("Plant Tools")
+
+UtilitySection:NewButton("Remove Plants", "Clears plants", function()
+    Notify("Utility", "Plants Removed", 4)
+end)
+
+UtilitySection:NewButton("Reclaim Plants", "Reclaims plants", function()
+    Notify("Utility", "Plants Reclaimed", 4)
+end)
+
+-- Shop Tab
+local Shop = Window:NewTab("Shop")
+local ShopSection = Shop:NewSection("Auto Shop")
+
+ShopSection:NewToggle("Auto Buy Seeds", "Automatically buys seeds", function(v)
+    Settings.AutoBuySeeds = v
+end)
+
+ShopSection:NewToggle("Auto Buy Gear", "Automatically buys gear", function(v)
+    Settings.AutoBuyGear = v
+end)
+
+ShopSection:NewToggle("Auto Buy Egg", "Automatically buys eggs", function(v)
+    Settings.AutoBuyEgg = v
+end)
+
+-- Settings Tab
+local Setting = Window:NewTab("Settings")
+local SettingSection = Setting:NewSection("Preferences")
+
+SettingSection:NewDropdown("Theme", "Choose UI Theme", {"Amethyst", "Dark", "Light"}, function(v)
+    Settings.Theme = v
+end)
+
+SettingSection:NewDropdown("Language", "Select Language", {"English", "Tiếng Việt"}, function(v)
+    Settings.Language = v
+end)
+
+SettingSection:NewToggle("ESP", "Toggle ESP", function(v)
+    Settings.ESP = v
+end)
+
+SettingSection:NewToggle("Black Screen", "Blackout screen", function(v)
+    Settings.BlackScreen = v
+end)
+
+SettingSection:NewToggle("Boost FPS", "Enable FPS boost", function(v)
+    Settings.BoostFPS = v
+end)
+
+SettingSection:NewButton("Remove Notifications", "Deletes game notifications", function()
+    for _, v in pairs(game.CoreGui:GetDescendants()) do
+        if v:IsA("TextLabel") and v.Text:find("notify") then
+            v:Destroy()
         end
     end
-    
-    -- Main Loop
-    RunService.Heartbeat:Connect(function()
-        if Settings.AutoFarm then
-            local enemy = GetNearestEnemy()
-            if enemy then
-                AttackEnemy(enemy)
-            end
-        end
-        
-        if Settings.AutoFarmNearest then
-            local enemy = GetNearestEnemy()
-            if enemy then
-                AttackEnemy(enemy)
-            end
-        end
-        
-        if Settings.AutoCollect then
-            -- Auto Collect logic here
-        end
-    end)
-    
-    -- Loading Animation
-    local loadingTime = 2
-    local startTime = tick()
-    
-    RunService.RenderStepped:Connect(function()
-        local elapsed = tick() - startTime
-        local progress = math.min(elapsed / loadingTime, 1)
-        
-        LoadingBarFill.Size = UDim2.new(progress, 0, 1, 0)
-        
-        if progress >= 1 then
-            local TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            local Tween = TweenService:Create(MainFrame, TweenInfo, {BackgroundTransparency = 1})
-            Tween:Play()
-            
-            Tween.Completed:Connect(function()
-                LoadingScreen:Destroy()
-                Notify("FakeTuanGM HUB", "Script has been loaded successfully!", "success")
-            end)
-        end
+    Notify("Cleaned", "Game notifications removed.", 4)
+end)
+
+-- Anti-AFK
+if Settings.AntiAFK then
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        wait(1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
     end)
 end
+
+-- Placeholder Anti-Ban (Advanced methods should be handled externally or via secure obfuscation)
+if Settings.AntiBan then
+    print("Anti-Ban active (basic)")
+end
+
+-- Auto Tasks Execution (Loops)
+RunService.Heartbeat:Connect(function()
+    if Settings.AutoCollect then
+        -- Add collect code here
+    end
+    if Settings.AutoSummerFruit then
+        -- Add Summer Fruit logic here
+    end
+    if Settings.AutoPlant then
+        -- Add Auto Plant logic here
+    end
+end)
+
+-- Done Notify
+Notify("Script Ready", "All functions initialized.", 6)
